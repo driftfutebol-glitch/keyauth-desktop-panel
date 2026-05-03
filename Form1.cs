@@ -19,6 +19,7 @@ public partial class Form1 : Form
     private TextBox _txtApiUrl = null!;
     private TextBox _txtBridgeUrl = null!;
     private TextBox _txtOwnerId = null!;
+    private TextBox _txtClientVersion = null!;
     private TextBox _txtSellerKey = null!;
     private TextBox _txtMask = null!;
     private TextBox _txtLevel = null!;
@@ -189,7 +190,7 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 16
+            RowCount = 18
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -199,11 +200,11 @@ public partial class Form1 : Form
         _cmbDuration = new ComboBox
         {
             Dock = DockStyle.Left,
-            DropDownStyle = ComboBoxStyle.DropDownList,
+            DropDownStyle = ComboBoxStyle.DropDown,
             Width = 180
         };
-        _cmbDuration.Items.AddRange(["7", "30", "90", "365"]);
-        _cmbDuration.SelectedIndex = 1;
+        _cmbDuration.Items.AddRange(["7", "10", "20", "30", "90", "365", "lifetime"]);
+        _cmbDuration.Text = "7";
 
         _txtLatestKey = new TextBox
         {
@@ -223,6 +224,11 @@ public partial class Form1 : Form
             Text = "http://localhost/keyauth-source/api/desktop/"
         };
         _txtOwnerId = new TextBox { Dock = DockStyle.Fill };
+        _txtClientVersion = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Text = "1.0"
+        };
         _txtSellerKey = new TextBox { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
         _txtMask = new TextBox
         {
@@ -248,6 +254,7 @@ public partial class Form1 : Form
         var btnCopyLatest = NewButton("Copiar Ultima", (_, _) => CopyLatest());
         var btnGenerateCloud = NewButton("Gerar no KeyAuth", async (_, _) => await GenerateLicenseOnKeyAuthAsync());
         var btnSaveConfig = NewButton("Salvar Config", (_, _) => SaveConnectionSettings());
+        var btnCopyClientConfig = NewButton("Copiar Config Cliente", (_, _) => CopyClientConfig());
 
         layout.Controls.Add(NewLabel("Nome do app"), 0, 0);
         layout.Controls.Add(_txtAppName, 1, 0);
@@ -275,16 +282,19 @@ public partial class Form1 : Form
         layout.Controls.Add(_txtBridgeUrl, 1, 8);
         layout.Controls.Add(NewLabel("OwnerID"), 0, 9);
         layout.Controls.Add(_txtOwnerId, 1, 9);
-        layout.Controls.Add(NewLabel("SellerKey"), 0, 10);
-        layout.Controls.Add(_txtSellerKey, 1, 10);
-        layout.Controls.Add(NewLabel("Mascara"), 0, 11);
-        layout.Controls.Add(_txtMask, 1, 11);
-        layout.Controls.Add(NewLabel("Level"), 0, 12);
-        layout.Controls.Add(_txtLevel, 1, 12);
-        layout.Controls.Add(NewLabel("Caracteres"), 0, 13);
-        layout.Controls.Add(_cmbCharMode, 1, 13);
-        layout.Controls.Add(btnGenerateCloud, 1, 14);
-        layout.Controls.Add(btnSaveConfig, 1, 15);
+        layout.Controls.Add(NewLabel("Versao cliente"), 0, 10);
+        layout.Controls.Add(_txtClientVersion, 1, 10);
+        layout.Controls.Add(NewLabel("SellerKey"), 0, 11);
+        layout.Controls.Add(_txtSellerKey, 1, 11);
+        layout.Controls.Add(NewLabel("Mascara"), 0, 12);
+        layout.Controls.Add(_txtMask, 1, 12);
+        layout.Controls.Add(NewLabel("Level"), 0, 13);
+        layout.Controls.Add(_txtLevel, 1, 13);
+        layout.Controls.Add(NewLabel("Caracteres"), 0, 14);
+        layout.Controls.Add(_cmbCharMode, 1, 14);
+        layout.Controls.Add(btnGenerateCloud, 1, 15);
+        layout.Controls.Add(btnSaveConfig, 1, 16);
+        layout.Controls.Add(btnCopyClientConfig, 1, 17);
 
         group.Controls.Add(layout);
         return group;
@@ -377,7 +387,7 @@ public partial class Form1 : Form
             return;
         }
 
-        if (!int.TryParse(_cmbDuration.SelectedItem?.ToString(), out var days) || days <= 0)
+        if (!TryGetDurationDays(out var days))
         {
             SetStatus("Duracao invalida.");
             return;
@@ -419,7 +429,7 @@ public partial class Form1 : Form
                 return;
             }
 
-            if (!int.TryParse(_cmbDuration.SelectedItem?.ToString(), out var days) || days <= 0)
+            if (!TryGetDurationDays(out var days))
             {
                 SetStatus("Duracao invalida.");
                 return;
@@ -519,6 +529,51 @@ public partial class Form1 : Form
 
         Clipboard.SetText(text);
         SetStatus("Ultima key copiada.");
+    }
+
+    private bool TryGetDurationDays(out int days)
+    {
+        var raw = _cmbDuration.Text.Trim();
+        if (string.Equals(raw, "lifetime", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "life", StringComparison.OrdinalIgnoreCase))
+        {
+            days = 36500;
+            return true;
+        }
+
+        return int.TryParse(raw, out days) && days > 0;
+    }
+
+    private void CopyClientConfig()
+    {
+        var apiUrl = _txtApiUrl.Text.Trim();
+        var appName = _txtAppName.Text.Trim();
+        var ownerId = _txtOwnerId.Text.Trim();
+        var version = _txtClientVersion.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(apiUrl) ||
+            string.IsNullOrWhiteSpace(appName) ||
+            string.IsNullOrWhiteSpace(ownerId) ||
+            string.IsNullOrWhiteSpace(version))
+        {
+            SetStatus("Preencha API URL, app, ownerid e versao para copiar a config do cliente.");
+            return;
+        }
+
+        var snippet =
+            "// Configuracao do app cliente. Nao coloque SellerKey no cliente." + Environment.NewLine +
+            $"private const string ApiUrl = \"{apiUrl}\";" + Environment.NewLine +
+            $"private const string AppName = \"{appName}\";" + Environment.NewLine +
+            $"private const string OwnerId = \"{ownerId}\";" + Environment.NewLine +
+            $"private const string Version = \"{version}\";" + Environment.NewLine +
+            Environment.NewLine +
+            "var hwid = $\"{Environment.MachineName}-{Environment.UserName}\";" + Environment.NewLine +
+            "var keyAuth = new KeyAuthPublicApiClient();" + Environment.NewLine +
+            "var result = await keyAuth.ValidateLicenseAsync(ApiUrl, AppName, OwnerId, keyDigitada, hwid, Version);" + Environment.NewLine +
+            "if (!result.Success) { MessageBox.Show(result.Message); return; }";
+
+        Clipboard.SetText(snippet);
+        SetStatus("Config do cliente copiada. SellerKey fica so no painel admin.");
     }
 
     private void ValidateLicenseLocal()
@@ -740,9 +795,11 @@ public partial class Form1 : Form
 
             var settings = new ConnectionSettings
             {
+                AppName = _txtAppName.Text.Trim(),
                 ApiUrl = _txtApiUrl.Text.Trim(),
                 BridgeUrl = _txtBridgeUrl.Text.Trim(),
                 OwnerId = _txtOwnerId.Text.Trim(),
+                ClientVersion = _txtClientVersion.Text.Trim(),
                 SellerKey = _txtSellerKey.Text.Trim(),
                 Mask = _txtMask.Text.Trim(),
                 Level = _txtLevel.Text.Trim()
@@ -774,12 +831,18 @@ public partial class Form1 : Form
                 return;
             }
 
+            _txtAppName.Text = string.IsNullOrWhiteSpace(settings.AppName) ? _txtAppName.Text : settings.AppName;
             _txtApiUrl.Text = string.IsNullOrWhiteSpace(settings.ApiUrl) ? _txtApiUrl.Text : settings.ApiUrl;
             _txtBridgeUrl.Text = string.IsNullOrWhiteSpace(settings.BridgeUrl) ? _txtBridgeUrl.Text : settings.BridgeUrl;
             _txtOwnerId.Text = string.IsNullOrWhiteSpace(settings.OwnerId) ? _txtOwnerId.Text : settings.OwnerId;
+            _txtClientVersion.Text = string.IsNullOrWhiteSpace(settings.ClientVersion) ? _txtClientVersion.Text : settings.ClientVersion;
             _txtSellerKey.Text = string.IsNullOrWhiteSpace(settings.SellerKey) ? _txtSellerKey.Text : settings.SellerKey;
             _txtMask.Text = string.IsNullOrWhiteSpace(settings.Mask) ? _txtMask.Text : settings.Mask;
             _txtLevel.Text = string.IsNullOrWhiteSpace(settings.Level) ? _txtLevel.Text : settings.Level;
+            if (string.IsNullOrWhiteSpace(_txtValidateApp.Text))
+            {
+                _txtValidateApp.Text = _txtAppName.Text;
+            }
         }
         catch
         {
@@ -800,9 +863,11 @@ public partial class Form1 : Form
 
     private sealed class ConnectionSettings
     {
+        public string AppName { get; init; } = string.Empty;
         public string ApiUrl { get; init; } = string.Empty;
         public string BridgeUrl { get; init; } = string.Empty;
         public string OwnerId { get; init; } = string.Empty;
+        public string ClientVersion { get; init; } = string.Empty;
         public string SellerKey { get; init; } = string.Empty;
         public string Mask { get; init; } = string.Empty;
         public string Level { get; init; } = string.Empty;
